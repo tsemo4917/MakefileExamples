@@ -14,9 +14,12 @@
 # limitations under the License.
 #
 
+MAKEFILE_FLAGS += -rR
+MAKEFILE_FLAGS += --no-print-directory
+
 ifeq ($(ROOT_DIR),)
 
-BUILD_OUTPUT = _build
+BUILD_OUTPUT = build
 # Application name
 BUILD_EXE    = test.exe
 
@@ -49,28 +52,25 @@ STRIP     = $(CROSS_COMPILE)strip
 
 export CPP CC LD AR NM OBJCOPY OBJDUMP READELF STRIP
 
-BUILTIN_O = _built-in.a
+BUILTIN_O = built-in.o
 
 
 .PHONY: __all__ $(BUILD_EXE)
-__all__: $(BUILD_EXE)
+all: $(BUILD_EXE)
 	@echo
 	@echo ">>>  successful !!"
 	@echo
 
 
 $(BUILD_EXE):
-	@make -C . --no-print-directory --no-builtin-rules
+	@$(MAKE) -C . $(MAKEFILE_FLAGS)
 	@set -e; \
 	 if [ ! -e $@ -o $@ -ot $(BUILDDIR)/$(BUILTIN_O) ]; then \
 		echo "    LD  $@"; \
 		$(CC) $(ALL_FLAGS) -o $@ $(BUILDDIR)/$(BUILTIN_O) $(LD_LIBS); \
 	 fi
 
-COMPILE_CFLAGS  := -Wall -Wundef -Werror=strict-prototypes -Wno-trigraphs \
-		   -fno-strict-aliasing -fno-common -fshort-wchar -std=gnu89 \
-		   -Werror=implicit-function-declaration -Werror=implicit-int \
-		   -Werror=return-type -Wno-format-security
+COMPILE_CFLAGS  := -std=gnu99 -Wall -Werror
 
 INCLUDES_DIR = $(sort $(INCLUDES))
 ALL_FLAGS = $(INCLUDES_DIR) $(CFLAGS) $(COMPILE_CFLAGS)
@@ -95,7 +95,6 @@ endif
 
 subdirs = $(patsubst %/,%,$(filter %/, $(obj-y)))
 
-abs_subdirs = $(addprefix $(CURDIR)/,$(subdirs))
 cur_objs = $(addprefix $(BUILDDIR)/$(CUR_RDIR)/,$(filter-out %/, $(obj-y)))
 
 abs_subdir_objs = $(patsubst %,$(BUILDDIR)/$(CUR_RDIR)/%/$(BUILTIN_O),$(subdirs))
@@ -119,21 +118,14 @@ __sub_dir_all__: $(cur_objs) $(subdirs)
 
 
 $(subdirs):
-	@make -C $@ -f $(ROOT_DIR)/Makefile --no-builtin-rules
-
-
-$(BUILDDIR)/$(CUR_RDIR)/%.d: $(CURDIR)/%.c
-	@mkdir -p $(dir $@)
-	@set -e; rm -f $@; \
-	$(CC) $(INCLUDES_DIR) -M $(CPPFLAGS) $< > $@.$$$$; \
-	sed 's,\($(*F)\)\.o[ :]*,$(@:.d=.o) $@ : ,g' < $@.$$$$ > $@; \
-	rm -f $@.$$$$
+	@$(MAKE) -C $@ -f $(ROOT_DIR)/Makefile $(MAKEFILE_FLAGS)
 
 -include $(DEPENDS)
 
-$(BUILDDIR)/$(CUR_RDIR)/%.o: $(BUILDDIR)/$(CUR_RDIR)/%.d
+$(BUILDDIR)/$(CUR_RDIR)/%.o: $(CURDIR)/%.c
+	@mkdir -p $(dir $@)
 	@echo "    CC  $(CUR_RDIR)/$*.o"
-	@$(CC) $(ALL_FLAGS) -c -o $@ $(CURDIR)/$*.c
+	@$(CC) $(ALL_FLAGS) -c -o $@ -MMD -MP $<
 
 PHONY += clean
 clean:
@@ -153,7 +145,6 @@ show_vars:
 	@echo "  subdirs = $(subdirs)"
 	@echo "  CURDIR = $(CURDIR)"
 	@echo "  CUR_RDIR = $(CUR_RDIR)"
-	@echo "  abs_subdirs = $(abs_subdirs)"
 	@echo "  cur_objs = $(cur_objs)"
 	@echo "  INCLUDES_DIR = $(INCLUDES_DIR)"
 	@echo "  DEPENDS = $(DEPENDS)"
